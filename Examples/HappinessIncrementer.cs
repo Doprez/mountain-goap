@@ -22,12 +22,11 @@ namespace Examples {
                     { "happinessRecentlyIncreased", false }
                 },
                 goals: new() {
-                    new(
+                    new Goal(
                         name: "Maximize Happiness",
                         desiredState: new() {
                             { "happinessRecentlyIncreased", true }
-                        }
-                    )
+                        })
                 },
                 sensors: new() {
                     new(EnnuiSensorHandler, "Ennui Sensor")

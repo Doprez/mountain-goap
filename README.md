@@ -2,7 +2,7 @@
 
 # Mountain GOAP
 
-Generic C# GOAP (Goal Oriented Action Planning) library for creating AI agents to be used in games. GOAP is a type of an AI system for games popularized by [the F.E.A.R. AI paper](https://alumni.media.mit.edu/~jorkin/gdc2006_orkin_jeff_fear.pdf). GOAP agents use A* pathfinding to plan paths through a series of sequential actions, creating action sequences that allow the agent to achieve its goals.
+Generic C# GOAP (Goal Oriented Action Planning) library for creating AI agents to be used in games. GOAP is a type of an AI system for games popularized by [the F.E.A.R. AI paper](https://alumni.media.mit.edu/~jorkin/gdc2006_orkin_jeff_fear.pdf). GOAP agents use A\* pathfinding to plan paths through a series of sequential actions, creating action sequences that allow the agent to achieve its goals.
 
 Mountain GOAP favors composition over inheritance, allowing you to create agents from a series of callbacks. In addition, Mountain GOAP's agents support multiple weighted goals and will attempt to find the greatest utility among a series of goals.
 
@@ -17,7 +17,10 @@ Mountain GOAP favors composition over inheritance, allowing you to create agents
     1. [Agents](#agents)
         1. [Agent state](#agent-state)
     2. [Goals](#goals)
+        1. [Extreme Goals](#extreme-goals)
+        2. [Comparative Goals](#comparative-goals)
     3. [Actions](#actions)
+        1. [Arithmetic Postconditions](#arithmetic-postconditions)
     4. [Sensors](#sensors)
     5. [Permutation selectors](#permutation-selectors)
     6. [Full API Docs](#full-api-docs)
@@ -83,6 +86,7 @@ What kind of timeframe is represented by a "step" will vary based on your engine
 The agent stores a dictionary of objects called its **state**. This state can include anything, but simple values work best with [goals](#goals) and [actions](#actions). If you need to reference complex game state, however, this is not a problem -- [sensors](#sensors), covered below, can be used to translate complex values like map states into simpler ones, like booleans. More on that below.
 
 State can be passed into the agent constructor, like so:
+
 ```csharp
 Agent agent = new Agent(
     state: new Dictionary<string, object> {
@@ -97,6 +101,7 @@ Agent agent = new Agent(
 **Goals** dictate the state values that the agent is trying to achieve. Goals have relatively simple constructors, taking just a dictionary of keys and values the agent wants to see in its state and a weight that indicates how important the goal is. The higher the weight, the more important the goal.
 
 Goals can be passed into the agent constructor, like so:
+
 ```csharp
 Goal goal = new Goal(
     desiredState: new Dictionary<string, object> {
@@ -111,6 +116,39 @@ Agent agent = new Agent(
 );
 ```
 
+#### Extreme Goals
+
+**Extreme goals** attempt to maximize or minimize a numeric state value. They take similar parameters to normal goals, but the values in the dictionary must be booleans. If the boolean is true, the goal will attempt to maximize the value. If the boolean is false, the goal will attempt to minimize the value. The state value must be a numeric type for this to work correctly.
+
+Example that will try to maximize the agent's health:
+
+```csharp
+ExtremeGoal goal = new ExtremeGoal(
+    desiredState: new Dictionary<string, object> {
+        { "health", true }
+    },
+    weight: 2f
+);
+```
+
+#### Comparative Goals
+
+**Comparative goals** attempt to make a numeric state value compare in a certain way to a base value. They take similar parameters to normal goals, but the values in the dictionary must be ComparisonValuePair objects. The ComparisonValuePair object specifies a value to use for comparison and a comparison operator to use. The state value must be a numeric type and the same type as the comparison value for this to work correctly.
+
+Example that will try to make the agent's health greater than 50:
+
+```csharp
+ComparativeGoal goal = new ComparativeGoal(
+    desiredState: new Dictionary<string, object> {
+        { "health", new ComparisonValuePair {
+            Value = 50,
+            Operator = ComparisonOperator.GreaterThan
+         } }
+    },
+    weight: 2f
+);
+```
+
 ### Actions
 
 **Actions** dictate arbitrary code the agent can execute to affect the world and achieve its goals. Each action, when it runs, will execute the code passed to it, which is called the action **executor**. Actions can also have **preconditions**, state values required before the agent is allowed to execute the action, and **postconditions**, which are values the state is expected to hold if the action is successful. Finally, each action has a **cost**, which is used in calculating the best plan for the agent.
@@ -118,6 +156,7 @@ Agent agent = new Agent(
 Actions return an `ExecutionStatus` enum to say if they succeeded or not. If they succeed, the postconditions will automatically be set to the values passed to the action constructor.
 
 Actions can be passed into the agent constructor, like so:
+
 ```csharp
 Action giveHugAction = new Action(
     executor: (Agent agent, Action action) => {
@@ -127,7 +166,7 @@ Action giveHugAction = new Action(
     preconditions: new Dictionary<string, object> {
         { "nearOtherAgent", true }
     },
-    postConditions: new Dictionary<string, object> {
+    postconditions: new Dictionary<string, object> {
         { "wasHugged", true }
     },
     cost: 0.5f
@@ -139,9 +178,29 @@ Agent agent = new Agent(
 );
 ```
 
+#### Arithmetic Postconditions
+
+**Arithmetic postconditions** are postconditions that are calculated by performing arithmetic on other state values. They take similar parameters to normal postconditions, but the values in the dictionary are added to the existing state value instead of replacing it. Note that the state value and the postcondition value must be of the same numeric type for this to work correctly.
+
+Example that will add 10 to the agent's health as a postcondition:
+
+```csharp
+Action heal = new Action(
+    executor: (Agent agent, Action action) => {
+        Console.WriteLine("healed for 10 hp");
+        return ExecutionStatus.Succeeded;
+    },
+    arithmeticPostconditions: new Dictionary<string, object> {
+        { "health", 10 }
+    },
+    cost: 0.5f
+);
+```
+
 ### Sensors
 
 **Sensors** allow an agent to distill information into their state, often derived from other state values. Sensors execute on every `Step()` call, and use a **sensor handler** to execute code. Sensors can be passed into the agent constructor, like so:
+
 ```csharp
 Sensor agentProximitySensor = new Sensor(
     (Agent agent) => {
@@ -187,32 +246,32 @@ Mountain GOAP features a simple event system that allows you to subscribe to eve
 
 The following events are available on agents:
 
-* OnAgentActionSequenceCompleted: Called when the agent has finished executing its plan.
-    - Example usage: `Agent.OnAgentActionSequenceCompleted += (Agent agent) => { Console.WriteLine("Agent finished executing its plan."); };`
-* OnAgentStep: Called when the agent executes a step of work.
-    - Example usage: `Agent.OnAgentStep += (Agent agent) => { Console.WriteLine("Agent is working."); };`
-* OnPlanningStarted: Called when the agent begins planning.
-    - Example usage: `Agent.OnPlanningStarted += (Agent agent) => { Console.WriteLine("Agent started planning."); };`
-* OnPlanningFinished: Called when the agent finishes planning.
-    - Example usage: `Agent.OnPlanningFinished += (Agent agent, Goal? goal, float utility) => { Console.WriteLine("Agent finished planning."); };`
-* OnPlanningFinishedForSingleGoal: Called when the agent finishes planning for a single goal.
-    - Example usage: `Agent.OnPlanningFinishedForSingleGoal += (Agent agent, Goal goal, float utility) => { Console.WriteLine("Agent finished planning for a single goal."); };`
+-   OnAgentActionSequenceCompleted: Called when the agent has finished executing its plan.
+    -   Example usage: `Agent.OnAgentActionSequenceCompleted += (Agent agent) => { Console.WriteLine("Agent finished executing its plan."); };`
+-   OnAgentStep: Called when the agent executes a step of work.
+    -   Example usage: `Agent.OnAgentStep += (Agent agent) => { Console.WriteLine("Agent is working."); };`
+-   OnPlanningStarted: Called when the agent begins planning.
+    -   Example usage: `Agent.OnPlanningStarted += (Agent agent) => { Console.WriteLine("Agent started planning."); };`
+-   OnPlanningFinished: Called when the agent finishes planning.
+    -   Example usage: `Agent.OnPlanningFinished += (Agent agent, Goal? goal, float utility) => { Console.WriteLine("Agent finished planning."); };`
+-   OnPlanningFinishedForSingleGoal: Called when the agent finishes planning for a single goal.
+    -   Example usage: `Agent.OnPlanningFinishedForSingleGoal += (Agent agent, Goal goal, float utility) => { Console.WriteLine("Agent finished planning for a single goal."); };`
 
 ### Action events
 
 The following events are available on actions:
 
-* OnBeginExecuteAction: Called when the agent begins executing an action.
-    - Example usage: `Action.OnBeginExecuteAction += (Agent agent, Action action, Dictionary<string, object> parameters) => { Console.WriteLine("Agent started executing an action."); };`
-* OnFinishExecuteAction: Called when the agent finishes executing an action.
-    - Example usage: `Action.OnFinishExecuteAction += (Agent agent, Action action, ExecutionStatus status, Dictionary<string, object> parameters) => { Console.WriteLine("Agent finished executing an action."); };`
+-   OnBeginExecuteAction: Called when the agent begins executing an action.
+    -   Example usage: `Action.OnBeginExecuteAction += (Agent agent, Action action, Dictionary<string, object> parameters) => { Console.WriteLine("Agent started executing an action."); };`
+-   OnFinishExecuteAction: Called when the agent finishes executing an action.
+    -   Example usage: `Action.OnFinishExecuteAction += (Agent agent, Action action, ExecutionStatus status, Dictionary<string, object> parameters) => { Console.WriteLine("Agent finished executing an action."); };`
 
 ### Sensor events
 
 The following events are available on sensors:
 
-* OnSensorRun: Called when the agent runs a sensor.
-    - Example usage: `Sensor.OnSensorRun += (Agent agent, Sensor sensor) => { Console.WriteLine("Agent ran a sensor."); };`
+-   OnSensorRun: Called when the agent runs a sensor.
+    -   Example usage: `Sensor.OnSensorRun += (Agent agent, Sensor sensor) => { Console.WriteLine("Agent ran a sensor."); };`
 
 ## Logger
 
@@ -234,45 +293,49 @@ _ = new MountainGoapLogger.DefaultLogger(
 
 ## Project Structure
 
-| File or folder | Description |
-| -------------- | ----------- |
-| `/Examples/` | Examples of how to use the library |
-| `/Examples/RpgExample/` | RPG grid-based example. |
-| `/Examples/RpgExample/RpgCharacterFactory.cs` | Static methods for creating character agents. |
-| `/Examples/RpgExample/RpgExample.cs` | Main RPG example entrypoint. |
-| `/Examples/RpgExample/RpgMonsterFactory.cs` | Static methods for creating enemy agents derived from the base character agent. |
-| `/Examples/RpgExample/Utils.cs` | RPG example utility functions. |
-| `/Examples/examples.md` | Examples documentation. |
-| `/Examples/HappinessIncrementer.cs` | Happiness incrementer example. |
-| `/Examples/Program.cs` | Examples entrypoint. |
-| `/MountainGoap/` | The main library folder |
-| `/MountainGoap/CallbackDelegates/` | Function signatures for callbacks. |
-| `/MountainGoap/CallbackDelegates/ExecutorCallback.cs` | Function signature for a callback that executes an action. |
+| File or folder                                                    | Description                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `/Examples/`                                                      | Examples of how to use the library                                                        |
+| `/Examples/RpgExample/`                                           | RPG grid-based example.                                                                   |
+| `/Examples/RpgExample/RpgCharacterFactory.cs`                     | Static methods for creating character agents.                                             |
+| `/Examples/RpgExample/RpgExample.cs`                              | Main RPG example entrypoint.                                                              |
+| `/Examples/RpgExample/RpgMonsterFactory.cs`                       | Static methods for creating enemy agents derived from the base character agent.           |
+| `/Examples/RpgExample/Utils.cs`                                   | RPG example utility functions.                                                            |
+| `/Examples/examples.md`                                           | Examples documentation.                                                                   |
+| `/Examples/HappinessIncrementer.cs`                               | Happiness incrementer example.                                                            |
+| `/Examples/Program.cs`                                            | Examples entrypoint.                                                                      |
+| `/MountainGoap/`                                                  | The main library folder                                                                   |
+| `/MountainGoap/CallbackDelegates/`                                | Function signatures for callbacks.                                                        |
+| `/MountainGoap/CallbackDelegates/ExecutorCallback.cs`             | Function signature for a callback that executes an action.                                |
 | `/MountainGoap/CallbackDelegates/PermutationSelectorCallbacks.cs` | Function signature for a callback that selects a list of options for an action parameter. |
-| `/MountainGoap/CallbackDelegates/SensorRunCallback.cs` | Function signature for a callback that runs a sensor. |
-| `/MountainGoap/Internals/` | Internal classes that external applications using the library will not need directly. |
-| `/MountainGoap/Internals/ActionAStar.cs` | Class that calculates AStar for an action graph. |
-| `/MountainGoap/Internals/ActionGraph.cs` | Class that represents an action graph. |
-| `/MountainGoap/Internals/ActionNode.cs` | Class that represents a node in an action graph. |
-| `/MountainGoap/Internals/CopyDictionaryExtensionMethod.cs` | Convenience extension method for copying a dictionary. |
-| `/MountainGoap/Internals/Planner.cs` | Planning class used by agents. |
-| `/MountainGoap/Action.cs` | An action that can be made available to agents. |
-| `/MountainGoap/Agent.cs` | An agent that can figure out plans to execute. |
-| `/MountainGoap/ExecutionStatus.cs` | An enum defining the execution status of an action. |
-| `/MountainGoap/Goal.cs` | A goal that agents can attempt to accomplish. |
-| `/MountainGoap/PermutationSelectorGenerators.cs` | Generators for lambda functions that return a list of options for an action parameter. |
-| `/MountainGoap/Sensor.cs` | A sensor that generates data for use by an agent. |
-| `/MountainGoapLogging/DefaultLogger.cs` | Example logger implementation that can be used to inspect agent behavior. |
+| `/MountainGoap/CallbackDelegates/SensorRunCallback.cs`            | Function signature for a callback that runs a sensor.                                     |
+| `/MountainGoap/Internals/`                                        | Internal classes that external applications using the library will not need directly.     |
+| `/MountainGoap/Internals/ActionAStar.cs`                          | Class that calculates AStar for an action graph.                                          |
+| `/MountainGoap/Internals/ActionGraph.cs`                          | Class that represents an action graph.                                                    |
+| `/MountainGoap/Internals/ActionNode.cs`                           | Class that represents a node in an action graph.                                          |
+| `/MountainGoap/Internals/CopyDictionaryExtensionMethod.cs`        | Convenience extension method for copying a dictionary.                                    |
+| `/MountainGoap/Internals/Planner.cs`                              | Planning class used by agents.                                                            |
+| `/MountainGoap/Action.cs`                                         | An action that can be made available to agents.                                           |
+| `/MountainGoap/Agent.cs`                                          | An agent that can figure out plans to execute.                                            |
+| `/MountainGoap/BaseGoal.cs`                                       | A base class for all goal types.                                                          |
+| `/MountainGoap/ComparativeGoal.cs`                                | A goal that compares a value to a pre-existing value                                      |
+| `/MountainGoap/ComparisonOperator.cs`                             | An enum defining the comparison operators that can be used with ComparativeGoal.          |
+| `/MountainGoap/ComparisonValuePair.cs`                            | A class that represents a comparison value pair.                                          |
+| `/MountainGoap/ExecutionStatus.cs`                                | An enum defining the execution status of an action.                                       |
+| `/MountainGoap/ExtremeGoal.cs`                                    | A goal that attempts to minimize or maximize a state value.                               |
+| `/MountainGoap/Goal.cs`                                           | A goal that agents can attempt to accomplish.                                             |
+| `/MountainGoap/PermutationSelectorGenerators.cs`                  | Generators for lambda functions that return a list of options for an action parameter.    |
+| `/MountainGoap/Sensor.cs`                                         | A sensor that generates data for use by an agent.                                         |
+| `/MountainGoapLogging/DefaultLogger.cs`                           | Example logger implementation that can be used to inspect agent behavior.                 |
 
 ## Roadmap
 
-* Improved API for turn-based games.
-* Tests
-* Examples - general and Unity
+-   Tests
+-   Examples - general and Unity
 
 ## Other open source GOAP projects
 
-* [ReGoap](https://github.com/luxkun/ReGoap) - C# GOAP library with more direct Unity support, providing Unity Components that can be attached to GameObjects.
+-   [ReGoap](https://github.com/luxkun/ReGoap) - C# GOAP library with more direct Unity support, providing Unity Components that can be attached to GameObjects.
 
 ## License Acknowledgements
 
